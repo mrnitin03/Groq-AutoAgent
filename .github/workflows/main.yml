@@ -20,9 +20,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+        run: pip install requests
 
       - name: Execute Bot
         env:
@@ -34,10 +32,10 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add verification_pack.txt
-          if git diff --staged --quiet; then
-            echo "No changes to commit"
-          else
-            git commit -m "chore: update verification_pack.txt [skip ci]"
+          if [ -f verification_pack.txt ]; then
+            git add verification_pack.txt
+            git commit -m "chore: update verification logs [skip ci]" || echo "No changes"
             git push
+          else
+            echo "verification_pack.txt not found. Skipping commit."
           fi
