@@ -1,24 +1,17 @@
 import requests
 
-def create_telegraph_account():
+def generate():
     url = "https://api.telegra.ph/createAccount"
-    params = {
-        "short_name": "DigitalNagari",
-        "author_name": "Digital Nagari Bot"
-    }
+    params = {"short_name": "DigitalNagari", "author_name": "Digital Nagari"}
     try:
-        response = requests.get(url, params=params).json()
-        if response.get("ok"):
-            token = response["result"]["access_token"]
+        r = requests.get(url, params=params).json()
+        if r.get("ok"):
+            token = r["result"]["access_token"]
             with open("telegraph_token.txt", "w") as f:
                 f.write(token)
-            print("Successfully generated TELEGRAPH_TOKEN")
-            print(f"Token: {token}")
-            print("Save this token in your GitHub Secrets as: TELEGRAPH_TOKEN")
-        else:
-            print(f"Error: {response.get('error')}")
+            print(f"TELEGRAPH_TOKEN: {token}")
     except Exception as e:
-        print(f"Connection Error: {e}")
+        print(f"Error: {e}")
 
 if __name__ == "__main__":
-    create_telegraph_account()
+    generate()
