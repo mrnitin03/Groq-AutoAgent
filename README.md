@@ -1,24 +1,17 @@
 # DigitalNagari-Groq-AutoAgent
 
-Production-grade Python automation using Groq AI and Telegraph API.
+Automated SEO agent for Digital Nagari (https://digitalnagari.site/).
 
-## Setup Guide
+### Quick Start
+1. **Groq Key**: Get it from [Groq Console](https://console.groq.com/).
+2. **Telegraph Token**: Run `python groq_token_generator.py`.
+3. **GitHub Secrets**:
+   - `GROQ_API_KEY`
+   - `TELEGRAPH_TOKEN`
+4. **Permissions**: Set **Workflow permissions** to `Read and write permissions` in GitHub Settings.
 
-### 1. Get Groq API Key
-- Sign up at [Groq Console](https://console.groq.com/).
-- Create an API key and copy it.
-
-### 2. Get Telegraph Token
-- Run the generator locally: `python groq_token_generator.py`.
-- Copy the token from `telegraph_token.txt`.
-
-### 3. GitHub Configuration
-1. Go to your Repository **Settings** > **Secrets and variables** > **Actions**.
-2. Create `GROQ_API_KEY` (Paste Groq key).
-3. Create `TELEGRAPH_TOKEN` (Paste Telegraph token).
-4. Go to **Settings** > **Actions** > **General**.
-5. Set **Workflow permissions** to `Read and write permissions`.
-
-### 4. Running
-- The bot runs automatically every 6 hours.
-- To run manually: Go to **Actions** tab > Select Workflow > **Run workflow**.
+### Features
+- Auto-generates content about Digital Nagari software/OTT products.
+- Embeds official website and Instagram links.
+- Pings search engines via IndexNow.
+- Logs all publications to `verification_pack.txt`.
