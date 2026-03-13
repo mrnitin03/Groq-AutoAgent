@@ -1,101 +1,60 @@
 import os
 import json
 import requests
-import time
 from datetime import datetime
 
-# Configuration
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 TELEGRAPH_TOKEN = os.getenv("TELEGRAPH_TOKEN")
 MODEL = "llama3-70b-8192"
 
 def get_seo_content():
     url = "https://api.groq.com/openai/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {GROQ_API_KEY}",
-        "Content-Type": "application/json"
-    }
-    
+    headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
     prompt = (
         "Write a high-quality SEO article about 'The Future of AI Automation in 2024'. "
-        "Format the response strictly as a JSON object with two keys: 'title' and 'paragraphs'. "
-        "'paragraphs' should be a list of strings. Do not include any other text."
+        "Format strictly as JSON: {'title': '...', 'paragraphs': ['...', '...']}"
     )
-    
     payload = {
         "model": MODEL,
         "messages": [{"role": "user", "content": prompt}],
         "response_format": {"type": "json_object"}
     }
-    
     try:
         response = requests.post(url, headers=headers, json=payload, timeout=30)
         response.raise_for_status()
-        data = response.json()
-        return json.loads(data['choices'][0]['message']['content'])
+        return json.loads(response.json()['choices'][0]['message']['content'])
     except Exception as e:
-        print(f"Error calling Groq: {e}")
+        print(f"Groq Error: {e}")
         return None
 
 def publish_to_telegraph(title, paragraphs):
     url = "https://api.telegra.ph/createPage"
-    
-    content = []
-    for p in paragraphs:
-        content.append({"tag": "p", "children": [p]})
-    
+    content = [{"tag": "p", "children": [p]} for p in paragraphs]
     payload = {
         "access_token": TELEGRAPH_TOKEN,
         "title": title,
         "author_name": "DigitalNagari AI",
-        "content": json.dumps(content),
-        "return_content": True
+        "content": json.dumps(content)
     }
-    
     try:
         response = requests.post(url, data=payload, timeout=20)
-        response.raise_for_status()
-        return response.json().get("result", {}).get("url")
+        res_data = response.json()
+        return res_data.get("result", {}).get("url") if res_data.get("ok") else None
     except Exception as e:
-        print(f"Error publishing to Telegraph: {e}")
+        print(f"Telegraph Error: {e}")
         return None
-
-def index_now(article_url):
-    url = "https://api.indexnow.org/indexnow"
-    payload = {
-        "host": "telegra.ph",
-        "key": "b6a32d1e9e7c4f5a8d2c1e9b7a3d2e1c", # Example Key
-        "keyLocation": f"{article_url}",
-        "urlList": [article_url]
-    }
-    try:
-        requests.post(url, json=payload, timeout=10)
-    except:
-        pass
 
 def main():
     if not GROQ_API_KEY or not TELEGRAPH_TOKEN:
-        print("Missing Environment Variables.")
         return
 
-    print("Generating content...")
     article = get_seo_content()
-    
-    if article and 'title' in article and 'paragraphs' in article:
-        print(f"Publishing: {article['title']}")
+    if article and 'title' in article:
         url = publish_to_telegraph(article['title'], article['paragraphs'])
-        
         if url:
-            print(f"Success! URL: {url}")
-            index_now(url)
-            
             with open("verification_pack.txt", "a") as f:
-                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                f.write(f"[{timestamp}] URL: {url} | Title: {article['title']}\n")
-        else:
-            print("Failed to publish.")
-    else:
-        print("Failed to generate valid content.")
+                f.write(f"[{datetime.now()}] {article['title']} - {url}\n")
+            print(f"Published: {url}")
 
 if __name__ == "__main__":
     main()
