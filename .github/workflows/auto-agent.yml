@@ -6,36 +6,33 @@ on:
   workflow_dispatch:
 
 jobs:
-  automate:
+  run-agent:
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Checkout Code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Install Dependencies
+      - name: Dependencies
         run: pip install requests
 
-      - name: Run Bot
+      - name: Execute
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           TELEGRAPH_TOKEN: ${{ secrets.TELEGRAPH_TOKEN }}
         run: python bot.py
 
-      - name: Commit and Push Logs
+      - name: Sync Logs
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          touch verification_pack.txt
           git add verification_pack.txt
-          if git diff --staged --quiet; then
-            echo "No changes to commit"
-          else
-            git commit -m "Update verification logs [skip ci]"
-            git push
-          fi
+          git commit -m "chore: update agent logs [skip ci]" || echo "No changes"
+          git push
