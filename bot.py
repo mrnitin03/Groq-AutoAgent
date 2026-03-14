@@ -3,26 +3,21 @@ import json
 import requests
 from datetime import datetime
 
-GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
+# API Config
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 TELEGRAPH_TOKEN = os.getenv("TELEGRAPH_TOKEN")
-
-# Aapki Photo ka URL (Direct link)
-MY_PHOTO_URL = "https://digitalnagari.site/wp-content/uploads/2024/logo.png" 
+LOG_FILE = "verification_pack.txt"
 
 def get_news_content():
-    headers = {
-        "Authorization": f"Bearer {GROQ_API_KEY}",
-        "Content-Type": "application/json"
-    }
+    print("LOG: Starting Groq API Request...")
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
     
-    # AI ko "Journalist" banane ka prompt
     prompt = (
-        "Write a formal news report about the rise of 'Digital Nagari' in the Indian Digital Market. "
-        "Headline should be catchy like 'Digital Nagari Revolutionizes Software Licensing in India'. "
-        "Mention the founder 'Nitin Nagari' and the website https://digitalnagari.site/. "
-        "The tone must be journalistic, as if written by a tech news portal. "
-        "Strictly return as JSON with keys: 'title' and 'paragraphs' (list of 5 strings)."
+        "Write a 500-word professional news article about 'Digital Nagari' (https://digitalnagari.site/). "
+        "Focus on: Best Deals on Software, AI Tools, and OTT subscriptions in India. "
+        "Mention Nitin Nagari and Instagram @digital_nagari__software__ott. "
+        "Return ONLY a JSON object with: 'title' and 'paragraphs' (list of strings)."
     )
     
     payload = {
@@ -32,50 +27,68 @@ def get_news_content():
     }
 
     try:
-        response = requests.post(GROQ_API_URL, headers=headers, json=payload, timeout=30)
-        return json.loads(response.json()['choices'][0]['message']['content'])
-    except:
+        res = requests.post(url, headers=headers, json=payload, timeout=30)
+        print(f"LOG: Groq Status Code: {res.status_code}")
+        if res.status_code != 200:
+            print(f"LOG: Groq Error Body: {res.text}")
+            return None
+        
+        data = res.json()
+        return json.loads(data['choices'][0]['message']['content'])
+    except Exception as e:
+        print(f"LOG: Groq Exception: {str(e)}")
         return None
 
 def publish_to_telegraph(title, paragraphs):
+    print("LOG: Publishing to Telegraph...")
     url = "https://api.telegra.ph/createPage"
     
-    # Telegraph Nodes build karna (With Image)
-    nodes = []
+    # Building nodes with brand images
+    nodes = [
+        {"tag": "img", "attrs": {"src": "https://digitalnagari.site/wp-content/uploads/2023/11/cropped-logo-1.png"}},
+        {"tag": "h3", "children": ["Digital Nagari Exclusive News"]}
+    ]
     
-    # 1. Pehle aapki Photo add karein
-    nodes.append({"tag": "figure", "children": [{"tag": "img", "attrs": {"src": MY_PHOTO_URL}}]})
-    
-    # 2. Articles ke paragraphs add karein
     for p in paragraphs:
         nodes.append({"tag": "p", "children": [p]})
     
-    # 3. Footer with Official Links
     nodes.append({"tag": "hr"})
-    nodes.append({"tag": "p", "children": ["Source: ", {"tag": "a", "attrs": {"href": "https://digitalnagari.site/"}, "children": ["Digital Nagari Official Portal"]}]})
+    nodes.append({"tag": "p", "children": ["Visit: ", {"tag": "a", "attrs": {"href": "https://digitalnagari.site/"}, "children": ["digitalnagari.site"]}]})
 
-    data = {
+    payload = {
         "access_token": TELEGRAPH_TOKEN,
         "title": title,
-        "author_name": "Tech News Network",
+        "author_name": "Digital Nagari Media",
         "content": json.dumps(nodes)
     }
 
     try:
-        r = requests.post(url, data=data).json()
-        return r["result"]["url"] if r.get("ok") else None
-    except:
+        r = requests.post(url, data=payload).json()
+        if r.get("ok"):
+            return r["result"]["url"]
+        else:
+            print(f"LOG: Telegraph API Error: {r.get('error')}")
+            return None
+    except Exception as e:
+        print(f"LOG: Telegraph Exception: {str(e)}")
         return None
 
 def main():
-    print("Generating Professional News Article...")
+    if not GROQ_API_KEY or not TELEGRAPH_TOKEN:
+        print("LOG: ERROR - Missing API Secrets in GitHub!")
+        return
+
     article = get_news_content()
-    if article:
+    if article and 'title' in article:
         link = publish_to_telegraph(article['title'], article['paragraphs'])
         if link:
-            with open("verification_pack.txt", "a") as f:
-                f.write(f"{datetime.now()} | NEWS LINK: {link}\n")
-            print(f"Article Live: {link}")
+            with open(LOG_FILE, "a") as f:
+                f.write(f"[{datetime.now()}] {article['title']} | URL: {link}\n")
+            print(f"LOG: SUCCESS! Created: {link}")
+        else:
+            print("LOG: ERROR - Failed to publish to Telegraph.")
+    else:
+        print("LOG: ERROR - Failed to get content from Groq.")
 
 if __name__ == "__main__":
     main()
