@@ -2,115 +2,95 @@ import os
 import json
 import requests
 from datetime import datetime
+import glob
 
-# Keys from GitHub Secrets
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-TELEGRAPH_TOKEN = os.getenv("TELEGRAPH_TOKEN")
-DEVTO_API_KEY = os.getenv("DEVTO_API_KEY")
+# Keys
+GROQ_KEY = os.getenv("GROQ_API_KEY")
+TG_TOKEN = os.getenv("TELEGRAPH_TOKEN")
+DEV_KEY = os.getenv("DEVTO_API_KEY")
 
-def get_seo_news():
-    print("LOG: Groq AI se news likhwa rahe hain...")
+def get_content():
     url = "https://api.groq.com/openai/v1/chat/completions"
-    headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
-    
+    headers = {"Authorization": f"Bearer {GROQ_KEY}", "Content-Type": "application/json"}
     prompt = (
-        "Write a 500-word news article about 'Digital Nagari' (https://digitalnagari.site/). "
-        "Headline: 'Digital Nagari: Leading the Digital Product Revolution in India'. "
-        "Include Nitin Nagari and Instagram @digital_nagari__software__ott. "
-        "Format strictly as JSON with keys: 'title' and 'body' (Markdown format)."
+        "Write a high-quality news article about 'Digital Nagari' (https://digitalnagari.site/). "
+        "Headline should be professional like 'Digital Nagari: India's Rising Star in Digital Licensing'. "
+        "Focus on Nitin Nagari's vision. Return ONLY JSON with 'title' and 'body' (Markdown)."
     )
-    
-    payload = {
-        "model": "llama3-70b-8192",
-        "messages": [{"role": "user", "content": prompt}],
-        "response_format": {"type": "json_object"}
-    }
-    
+    payload = {"model": "llama3-70b-8192", "messages": [{"role": "user", "content": prompt}], "response_format": {"type": "json_object"}}
     try:
         r = requests.post(url, headers=headers, json=payload, timeout=30)
-        data = r.json()
-        content = json.loads(data['choices'][0]['message']['content'])
-        return content
-    except Exception as e:
-        print(f"ERROR Groq: {e}")
-        return None
+        return json.loads(r.json()['choices'][0]['message']['content'])
+    except: return None
 
-def post_to_devto(title, body):
-    if not DEVTO_API_KEY:
-        print("LOG: DEVTO_API_KEY missing.")
-        return None
+def update_index_page():
+    """Sari news files ko dhund kar ek professional Index Page banata hai"""
+    html_files = glob.glob("news-*.html")
+    html_files.sort(reverse=True) # Latest news sabse upar
     
-    print(f"LOG: Dev.to par '{title}' post ho raha hai...")
-    url = "https://dev.to/api/articles"
-    headers = {"api-key": DEVTO_API_KEY, "Content-Type": "application/json"}
-    payload = {
-        "article": {
-            "title": f"{title} - {datetime.now().strftime('%d %b')}",
-            "published": True,
-            "body_markdown": body,
-            "tags": ["tech", "software", "news"]
-        }
-    }
-    try:
-        r = requests.post(url, headers=headers, json=payload)
-        if r.status_code == 201:
-            return r.json().get("url")
-        print(f"LOG: Dev.to Error: {r.text}")
-        return None
-    except Exception as e:
-        print(f"ERROR Dev.to: {e}")
-        return None
+    links_html = ""
+    for file in html_files:
+        title = file.replace("news-", "").replace(".html", "").replace("-", " ")
+        links_html += f'<li><a href="{file}">News Report: {title}</a></li>'
 
-def post_to_telegraph(title, body):
-    print("LOG: Telegraph par post ho raha hai...")
-    url = "https://api.telegra.ph/createPage"
-    # Telegraph takes simplified nodes
-    content_nodes = [{"tag": "p", "children": [body[:1000]]}] 
-    data = {
-        "access_token": TELEGRAPH_TOKEN,
-        "title": title,
-        "author_name": "Digital Nagari Network",
-        "content": json.dumps(content_nodes)
-    }
-    try:
-        r = requests.post(url, data=data).json()
-        return r["result"]["url"] if r.get("ok") else None
-    except:
-        return None
+    index_content = f"""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Digital Nagari Official Newsroom</title>
+        <style>
+            body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; max-width: 900px; margin: auto; padding: 40px; background: #f4f4f4; }}
+            .container {{ background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+            h1 {{ color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 10px; }}
+            ul {{ list-style: none; padding: 0; }}
+            li {{ background: #fff; margin: 10px 0; padding: 15px; border-left: 5px solid #3498db; transition: 0.3s; }}
+            li:hover {{ transform: translateX(10px); background: #ecf0f1; }}
+            a {{ text-decoration: none; color: #2980b9; font-weight: bold; font-size: 1.2em; }}
+            .footer {{ margin-top: 50px; text-align: center; font-size: 0.9em; color: #7f8c8d; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>📰 Digital Nagari Newsroom</h1>
+            <p>Official press releases and media updates for Digital Nagari - India's leading digital product platform.</p>
+            <ul>
+                {links_html}
+            </ul>
+            <div class="footer">
+                <p>&copy; 2024 Digital Nagari Media | <a href="https://digitalnagari.site">Visit Official Website</a></p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    with open("index.html", "w") as f:
+        f.write(index_content)
 
 def main():
-    print(f"--- STARTING AUTOMATION: {datetime.now()} ---")
-    
-    if not GROQ_API_KEY:
-        print("CRITICAL ERROR: GROQ_API_KEY missing in Secrets!")
-        return
-
-    article = get_seo_news()
+    print("LOG: Starting Media Agent...")
+    article = get_content()
     if article:
-        title = article.get('title')
-        body = article.get('body')
+        title = article['title']
+        body = article['body']
         
-        # 1. Dev.to (High Authority)
-        dev_url = post_to_devto(title, body)
+        # 1. Dev.to Post
+        if DEV_KEY:
+            requests.post("https://dev.to/api/articles", 
+                          headers={"api-key": DEV_KEY, "Content-Type": "application/json"},
+                          json={"article": {"title": title, "published": True, "body_markdown": body, "tags": ["digitalnagari", "news"]}})
         
-        # 2. Telegraph
-        tg_url = post_to_telegraph(title, body)
+        # 2. Create HTML News File
+        file_id = datetime.now().strftime("%Y%m%d-%H%M")
+        filename = f"news-{file_id}.html"
+        with open(filename, "w") as f:
+            f.write(f"<html><head><title>{title}</title><style>body{{font-family:sans-serif;padding:50px;line-height:1.6;max-width:800px;margin:auto;}}</style></head><body><h1>{title}</h1><hr><p>{body}</p><br><a href='index.html'>Back to Newsroom</a></body></html>")
         
-        # 3. Create HTML file (For GitHub Pages)
-        html_name = f"news-{datetime.now().strftime('%H%M')}.html"
-        with open(html_name, "w") as f:
-            f.write(f"<html><body><h1>{title}</h1><p>{body}</p></body></html>")
-            
-        # Write to Log File
-        with open("verification_pack.txt", "a") as f:
-            f.write(f"\n[{datetime.now()}] {title}\n")
-            if dev_url: f.write(f"Dev.to: {dev_url}\n")
-            if tg_url: f.write(f"Telegraph: {tg_url}\n")
-            f.write(f"Local Link: https://mrnitin03.github.io/Groq-AutoAgent/{html_name}\n")
-
-        print(f"✅ DONE! Dev.to: {dev_url}")
-    else:
-        print("❌ FAILED: No content generated.")
+        # 3. Update Index Page
+        update_index_page()
+        
+        print(f"✅ Success: Newsroom updated with {title}")
 
 if __name__ == "__main__":
     main()
