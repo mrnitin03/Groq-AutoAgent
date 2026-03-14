@@ -1,8 +1,8 @@
-name: DigitalNagari-Groq-AutoAgent
+name: DigitalNagari-MultiAgent
 
 on:
   schedule:
-    - cron: "0 */6 * * *"
+    - cron: "0 */12 * * *" # Har 12 ghante mein
   workflow_dispatch:
 
 jobs:
@@ -11,10 +11,10 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Checkout Repository
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -22,20 +22,21 @@ jobs:
       - name: Install Dependencies
         run: pip install requests
 
-      - name: Execute Bot
+      - name: Execute Multi-Agent Bot
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           TELEGRAPH_TOKEN: ${{ secrets.TELEGRAPH_TOKEN }}
+          DEVTO_API_KEY: ${{ secrets.DEVTO_API_KEY }}
         run: python bot.py
 
-      - name: Commit Verification Pack
+      - name: Commit All Changes (HTML & Logs)
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          if [ -f verification_pack.txt ]; then
-            git add verification_pack.txt
-            git commit -m "chore: update verification logs [skip ci]" || echo "No changes"
-            git push
+          git add .
+          if git diff --staged --quiet; then
+            echo "No changes"
           else
-            echo "verification_pack.txt not found. Skipping commit."
+            git commit -m "chore: publish new articles [skip ci]"
+            git push
           fi
