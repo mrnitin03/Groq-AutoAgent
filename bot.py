@@ -6,89 +6,93 @@ from datetime import datetime
 # API Config
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 TELEGRAPH_TOKEN = os.getenv("TELEGRAPH_TOKEN")
+DEVTO_API_KEY = os.getenv("DEVTO_API_KEY") # Optional: Dev.to key
 LOG_FILE = "verification_pack.txt"
 
 def get_news_content():
-    print("LOG: Starting Groq API Request...")
     url = "https://api.groq.com/openai/v1/chat/completions"
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
-    
     prompt = (
-        "Write a 500-word professional news article about 'Digital Nagari' (https://digitalnagari.site/). "
-        "Focus on: Best Deals on Software, AI Tools, and OTT subscriptions in India. "
-        "Mention Nitin Nagari and Instagram @digital_nagari__software__ott. "
-        "Return ONLY a JSON object with: 'title' and 'paragraphs' (list of strings)."
+        "Write a professional PR news article about 'Digital Nagari' (https://digitalnagari.site/). "
+        "Tone: Journalistic and corporate. Headline: 'Digital Nagari Set to Disrupt the Indian OTT and Software Market'. "
+        "Return as JSON with 'title', 'tags' (list), and 'content' (long string with HTML tags like <p> and <h2>)."
     )
-    
     payload = {
         "model": "llama3-70b-8192",
         "messages": [{"role": "user", "content": prompt}],
         "response_format": {"type": "json_object"}
     }
-
     try:
         res = requests.post(url, headers=headers, json=payload, timeout=30)
-        print(f"LOG: Groq Status Code: {res.status_code}")
-        if res.status_code != 200:
-            print(f"LOG: Groq Error Body: {res.text}")
-            return None
-        
-        data = res.json()
-        return json.loads(data['choices'][0]['message']['content'])
-    except Exception as e:
-        print(f"LOG: Groq Exception: {str(e)}")
+        return json.loads(res.json()['choices'][0]['message']['content'])
+    except:
         return None
 
-def publish_to_telegraph(title, paragraphs):
-    print("LOG: Publishing to Telegraph...")
+def publish_to_telegraph(title, content_html):
+    # Converts HTML to Telegraph format and publishes
     url = "https://api.telegra.ph/createPage"
-    
-    # Building nodes with brand images
-    nodes = [
-        {"tag": "img", "attrs": {"src": "https://digitalnagari.site/wp-content/uploads/2023/11/cropped-logo-1.png"}},
-        {"tag": "h3", "children": ["Digital Nagari Exclusive News"]}
-    ]
-    
-    for p in paragraphs:
-        nodes.append({"tag": "p", "children": [p]})
-    
-    nodes.append({"tag": "hr"})
-    nodes.append({"tag": "p", "children": ["Visit: ", {"tag": "a", "attrs": {"href": "https://digitalnagari.site/"}, "children": ["digitalnagari.site"]}]})
-
-    payload = {
-        "access_token": TELEGRAPH_TOKEN,
-        "title": title,
-        "author_name": "Digital Nagari Media",
-        "content": json.dumps(nodes)
-    }
-
+    # Simple conversion: wrappping content in nodes
+    nodes = [{"tag": "p", "children": [content_html.replace("<p>", "").replace("</p>", "\n")]}]
+    data = {"access_token": TELEGRAPH_TOKEN, "title": title, "author_name": "Digital Nagari PR", "content": json.dumps(nodes)}
     try:
-        r = requests.post(url, data=payload).json()
-        if r.get("ok"):
-            return r["result"]["url"]
-        else:
-            print(f"LOG: Telegraph API Error: {r.get('error')}")
-            return None
-    except Exception as e:
-        print(f"LOG: Telegraph Exception: {str(e)}")
+        r = requests.post(url, data=data).json()
+        return r["result"]["url"] if r.get("ok") else None
+    except:
         return None
+
+def publish_to_devto(title, content_html, tags):
+    """Publishes to Dev.to (High Authority News)"""
+    if not DEVTO_API_KEY: return None
+    url = "https://dev.to/api/articles"
+    headers = {"api-key": DEVTO_API_KEY, "Content-Type": "application/json"}
+    payload = {"article": {"title": title, "published": True, "body_markdown": content_html, "tags": tags}}
+    try:
+        r = requests.post(url, headers=headers, json=payload)
+        return r.json().get("url")
+    except:
+        return None
+
+def create_github_blog_page(title, content_html):
+    """Creates an HTML file in the repo to act as a permanent News Blog"""
+    filename = f"news-{datetime.now().strftime('%Y%m%d%H%M')}.html"
+    template = f"""
+    <html>
+    <head><title>{title}</title><style>body{{font-family:sans-serif; line-height:1.6; padding:50px;}}</style></head>
+    <body>
+        <h1>{title}</h1>
+        <hr>
+        {content_html}
+        <br>
+        <p>Published by <a href="https://digitalnagari.site">Digital Nagari</a></p>
+    </body>
+    </html>
+    """
+    with open(filename, "w") as f:
+        f.write(template)
+    return filename
 
 def main():
-    if not GROQ_API_KEY or not TELEGRAPH_TOKEN:
-        print("LOG: ERROR - Missing API Secrets in GitHub!")
-        return
-
+    if not GROQ_API_KEY: return
+    
     article = get_news_content()
-    if article and 'title' in article:
-        link = publish_to_telegraph(article['title'], article['paragraphs'])
-        if link:
-            with open(LOG_FILE, "a") as f:
-                f.write(f"[{datetime.now()}] {article['title']} | URL: {link}\n")
-            print(f"LOG: SUCCESS! Created: {link}")
-        else:
-            print("LOG: ERROR - Failed to publish to Telegraph.")
-    else:
-        print("LOG: ERROR - Failed to get content from Groq.")
+    if article:
+        # 1. Telegraph
+        tg_url = publish_to_telegraph(article['title'], article['content'])
+        
+        # 2. GitHub Blog Page (Permanent)
+        gh_file = create_github_blog_page(article['title'], article['content'])
+        
+        # 3. Dev.to (Optional)
+        dev_url = publish_to_devto(article['title'], article['content'], article.get('tags', []))
+
+        # Saving logs
+        with open(LOG_FILE, "a") as f:
+            log = f"[{datetime.now()}] TITLE: {article['title']}\n"
+            if tg_url: log += f" - Telegraph: {tg_url}\n"
+            log += f" - GitHub News: https://mrnitin03.github.io/Groq-AutoAgent/{gh_file}\n"
+            if dev_url: log += f" - Dev.to: {dev_url}\n"
+            f.write(log + "-"*20 + "\n")
+        print("Done!")
 
 if __name__ == "__main__":
     main()
