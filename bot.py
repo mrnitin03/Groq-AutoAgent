@@ -3,96 +3,114 @@ import json
 import requests
 from datetime import datetime
 
-# API Config
+# Keys from GitHub Secrets
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 TELEGRAPH_TOKEN = os.getenv("TELEGRAPH_TOKEN")
 DEVTO_API_KEY = os.getenv("DEVTO_API_KEY")
-LOG_FILE = "verification_pack.txt"
 
-def get_news_content():
+def get_seo_news():
+    print("LOG: Groq AI se news likhwa rahe hain...")
     url = "https://api.groq.com/openai/v1/chat/completions"
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
+    
     prompt = (
-        "Write a 600-word professional news article about 'Digital Nagari' (https://digitalnagari.site/). "
-        "Headline: 'Digital Nagari: The All-in-One Hub for Premium Software and OTT Solutions in India'. "
-        "Describe how Nitin Nagari is helping users get affordable access to digital tools. "
-        "Return strictly as a JSON object with: 'title', 'tags' (list of 4 strings), and 'content' (HTML string with <p>, <h2> tags)."
+        "Write a 500-word news article about 'Digital Nagari' (https://digitalnagari.site/). "
+        "Headline: 'Digital Nagari: Leading the Digital Product Revolution in India'. "
+        "Include Nitin Nagari and Instagram @digital_nagari__software__ott. "
+        "Format strictly as JSON with keys: 'title' and 'body' (Markdown format)."
     )
+    
     payload = {
         "model": "llama3-70b-8192",
         "messages": [{"role": "user", "content": prompt}],
         "response_format": {"type": "json_object"}
     }
+    
     try:
-        res = requests.post(url, headers=headers, json=payload, timeout=30)
-        return json.loads(res.json()['choices'][0]['message']['content'])
+        r = requests.post(url, headers=headers, json=payload, timeout=30)
+        data = r.json()
+        content = json.loads(data['choices'][0]['message']['content'])
+        return content
     except Exception as e:
-        print(f"Groq Error: {e}")
+        print(f"ERROR Groq: {e}")
         return None
 
-def publish_to_telegraph(title, content_html):
+def post_to_devto(title, body):
+    if not DEVTO_API_KEY:
+        print("LOG: DEVTO_API_KEY missing.")
+        return None
+    
+    print(f"LOG: Dev.to par '{title}' post ho raha hai...")
+    url = "https://dev.to/api/articles"
+    headers = {"api-key": DEVTO_API_KEY, "Content-Type": "application/json"}
+    payload = {
+        "article": {
+            "title": f"{title} - {datetime.now().strftime('%d %b')}",
+            "published": True,
+            "body_markdown": body,
+            "tags": ["tech", "software", "news"]
+        }
+    }
+    try:
+        r = requests.post(url, headers=headers, json=payload)
+        if r.status_code == 201:
+            return r.json().get("url")
+        print(f"LOG: Dev.to Error: {r.text}")
+        return None
+    except Exception as e:
+        print(f"ERROR Dev.to: {e}")
+        return None
+
+def post_to_telegraph(title, body):
+    print("LOG: Telegraph par post ho raha hai...")
     url = "https://api.telegra.ph/createPage"
-    # Simple formatting for Telegraph
-    clean_text = content_html.replace("<p>", "").replace("</p>", "\n\n").replace("<h2>", "--- ").replace("</h2>", " ---")
-    nodes = [{"tag": "p", "children": [clean_text]}]
-    data = {"access_token": TELEGRAPH_TOKEN, "title": title, "author_name": "Digital Nagari Media", "content": json.dumps(nodes)}
+    # Telegraph takes simplified nodes
+    content_nodes = [{"tag": "p", "children": [body[:1000]]}] 
+    data = {
+        "access_token": TELEGRAPH_TOKEN,
+        "title": title,
+        "author_name": "Digital Nagari Network",
+        "content": json.dumps(content_nodes)
+    }
     try:
         r = requests.post(url, data=data).json()
         return r["result"]["url"] if r.get("ok") else None
     except:
         return None
 
-def publish_to_devto(title, content_html, tags):
-    if not DEVTO_API_KEY: return None
-    url = "https://dev.to/api/articles"
-    headers = {"api-key": DEVTO_API_KEY, "Content-Type": "application/json"}
-    # Dev.to accepts Markdown or HTML
-    payload = {"article": {"title": title, "published": True, "body_markdown": content_html, "tags": tags}}
-    try:
-        r = requests.post(url, headers=headers, json=payload)
-        return r.json().get("url")
-    except:
-        return None
-
 def main():
-    if not GROQ_API_KEY: return
+    print(f"--- STARTING AUTOMATION: {datetime.now()} ---")
     
-    article = get_news_content()
-    if article:
-        print(f"Title: {article['title']}")
-        
-        # 1. Publish to Telegraph
-        tg_url = publish_to_telegraph(article['title'], article['content'])
-        
-        # 2. Publish to Dev.to
-        dev_url = publish_to_devto(article['title'], article['content'], article.get('tags', []))
-        
-        # 3. Create GitHub HTML Page (For GitHub Pages)
-        file_id = datetime.now().strftime("%Y%m%d-%H%M")
-        filename = f"news-{file_id}.html"
-        html_content = f"""
-        <!DOCTYPE html>
-        <html><head><title>{article['title']}</title>
-        <style>body{{font-family:sans-serif;max-width:800px;margin:auto;padding:20px;line-height:1.6;}}</style>
-        </head><body>
-        <h1>{article['title']}</h1>
-        <p><i>Published on: {datetime.now().date()}</i></p>
-        <hr>{article['content']}
-        <hr><p>Official Site: <a href="https://digitalnagari.site/">Digital Nagari</a></p>
-        </body></html>
-        """
-        with open(filename, "w", encoding="utf-8") as f:
-            f.write(html_content)
+    if not GROQ_API_KEY:
+        print("CRITICAL ERROR: GROQ_API_KEY missing in Secrets!")
+        return
 
-        # Update Logs
-        with open(LOG_FILE, "a") as f:
-            f.write(f"\n--- {datetime.now()} ---\n")
-            f.write(f"TITLE: {article['title']}\n")
-            if tg_url: f.write(f"Telegraph: {tg_url}\n")
-            if dev_url: f.write(f"Dev.to: {dev_url}\n")
-            f.write(f"Local: {filename}\n")
+    article = get_seo_news()
+    if article:
+        title = article.get('title')
+        body = article.get('body')
         
-        print(f"Success! Dev.to: {dev_url} | Telegraph: {tg_url}")
+        # 1. Dev.to (High Authority)
+        dev_url = post_to_devto(title, body)
+        
+        # 2. Telegraph
+        tg_url = post_to_telegraph(title, body)
+        
+        # 3. Create HTML file (For GitHub Pages)
+        html_name = f"news-{datetime.now().strftime('%H%M')}.html"
+        with open(html_name, "w") as f:
+            f.write(f"<html><body><h1>{title}</h1><p>{body}</p></body></html>")
+            
+        # Write to Log File
+        with open("verification_pack.txt", "a") as f:
+            f.write(f"\n[{datetime.now()}] {title}\n")
+            if dev_url: f.write(f"Dev.to: {dev_url}\n")
+            if tg_url: f.write(f"Telegraph: {tg_url}\n")
+            f.write(f"Local Link: https://mrnitin03.github.io/Groq-AutoAgent/{html_name}\n")
+
+        print(f"✅ DONE! Dev.to: {dev_url}")
+    else:
+        print("❌ FAILED: No content generated.")
 
 if __name__ == "__main__":
     main()
