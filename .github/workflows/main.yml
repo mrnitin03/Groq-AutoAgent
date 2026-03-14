@@ -1,8 +1,8 @@
-name: DigitalNagari-MultiAgent
+name: DigitalNagari-Groq-AutoAgent
 
 on:
   schedule:
-    - cron: "0 */12 * * *" # Har 12 ghante mein
+    - cron: "0 */12 * * *"
   workflow_dispatch:
 
 jobs:
@@ -22,21 +22,21 @@ jobs:
       - name: Install Dependencies
         run: pip install requests
 
-      - name: Execute Multi-Agent Bot
+      - name: Execute Bot
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           TELEGRAPH_TOKEN: ${{ secrets.TELEGRAPH_TOKEN }}
           DEVTO_API_KEY: ${{ secrets.DEVTO_API_KEY }}
         run: python bot.py
 
-      - name: Commit All Changes (HTML & Logs)
+      - name: Commit Logs & HTML
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add .
           if git diff --staged --quiet; then
-            echo "No changes"
+            echo "No changes to commit"
           else
-            git commit -m "chore: publish new articles [skip ci]"
+            git commit -m "chore: update news articles [skip ci]"
             git push
           fi
